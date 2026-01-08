@@ -1,21 +1,9 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Apr 12 10:04:38 2021
-
-@author: htchen
-"""
-
-# If this script is not run under spyder IDE, comment the following two lines.
-from IPython import get_ipython
-get_ipython().run_line_magic('reset', '-sf')
-
 import numpy as np
-import numpy.linalg as la
 import matplotlib.pyplot as plt
 import pandas as pd
 
+# 畫圖範圍設定輔助函式
 def scatter_pts_2d(x, y):
-    # set plotting limits
     xmax = np.max(x)
     xmin = np.min(x)
     xgap = (xmax - xmin) * 0.2
@@ -27,78 +15,113 @@ def scatter_pts_2d(x, y):
     ygap = (ymax - ymin) * 0.2
     ymin -= ygap
     ymax += ygap 
+    return xmin, xmax, ymin, ymax
 
-    return xmin,xmax,ymin,ymax
+# 讀取資料
+# 請確認 'hw7.csv' 在你的工作目錄中
+try:
+    dataset = pd.read_csv('hw7.csv').to_numpy(dtype=np.float64)
+except FileNotFoundError:
+    dataset = pd.read_csv('data/hw7.csv').to_numpy(dtype=np.float64)
 
-dataset = pd.read_csv(r"C:\Users\chiupin\Desktop\研究所\資訊專題\data\hw7.csv").to_numpy(dtype = np.float64)
 x = dataset[:, 0]
 y = dataset[:, 1]
 
-# parameters for our two runs of gradient descent
+# ---------------------------------------------------------
+# 第一部分：解析法 (Analytic Gradient Descent)
+# 使用偏導數公式直接計算
+# ---------------------------------------------------------
+print("開始執行：解析法 (Analytic Method)")
 w = np.array([-0.1607108,  2.0808538,  0.3277537, -1.5511576])
-
 alpha = 0.05
 max_iters = 500
-# cost function
-#     J(w0, w1, w2, w3) = sum(y[i] - w0 - w1 * sin(w2 * x[i] + w3))^2
-for _ in range(1, max_iters):
 
-    y_pred = w[0] + w[1] * np.sin(w[2] * x + w[3])
+for _ in range(1, max_iters):
+    # 預測值 y_pred
+    # y_pred = w0 + w1 * sin(w2 * x + w3)
+    arg = w[2] * x + w[3]
+    y_pred = w[0] + w[1] * np.sin(arg)
+    
+    # 誤差 e = y - y_pred
     e = y - y_pred
     
-    # 根據公式計算梯度 (Partial Derivatives)
-    dw0 = -np.sum(2 * e)
-    dw1 = -np.sum(2 * e * np.sin(w[2] * x + w[3]))
-    dw2 = -np.sum(2 * e * x * w[1] * np.cos(w[2] * x + w[3]))
-    dw3 = -np.sum(2 * e * w[1] * np.cos(w[2] * x + w[3]))
+    # 計算梯度 (Partial Derivatives)
+    # J = sum(e^2) -> dJ/dw = sum(2*e * de/dw) = sum(-2*e * dy_pred/dw)
     
-    gradient_of_cost = np.array([dw0, dw1, dw2, dw3])
+    # dJ/dw0 = sum(-2 * e * 1)
+    grad_0 = -np.sum(2 * e)
+    
+    # dJ/dw1 = sum(-2 * e * sin(w2*x + w3))
+    grad_1 = -np.sum(2 * e * np.sin(arg))
+    
+    # dJ/dw2 = sum(-2 * e * w1 * cos(w2*x + w3) * x)
+    grad_2 = -np.sum(2 * e * w[1] * np.cos(arg) * x)
+    
+    # dJ/dw3 = sum(-2 * e * w1 * cos(w2*x + w3))
+    grad_3 = -np.sum(2 * e * w[1] * np.cos(arg))
+    
+    gradient_of_cost = np.array([grad_0, grad_1, grad_2, grad_3])
     
     # 更新權重
     w = w - alpha * gradient_of_cost
 
-
-
-xmin,xmax,ymin,ymax = scatter_pts_2d(x, y)
+# 記錄解析法的結果曲線
+xmin, xmax, ymin, ymax = scatter_pts_2d(x, y)
 xt = np.linspace(xmin, xmax, 100)
 yt1 = w[0] + w[1] * np.sin(w[2] * xt + w[3])
 
+
+# ---------------------------------------------------------
+# 第二部分：數值法 (Numeric Gradient Descent)
+# 使用微小變化量 epsilon 估算梯度
+# ---------------------------------------------------------
+print("開始執行：數值法 (Numeric Method)")
 w = np.array([-0.1607108,  2.0808538,  0.3277537, -1.5511576])
-# --- 第二段：數值法 ---
-eps = 1e-8 # 設定微小變化量
+epsilon = 1e-8  # 微小變化量
+
 for _ in range(1, max_iters):
-    # 先計算目前的 Cost
-    y_p = w[0] + w[1] * np.sin(w[2] * x + w[3])
-    current_cost = np.sum((y - y_p)**2)
+    # 1. 計算當前的 Cost
+    arg = w[2] * x + w[3]
+    y_pred = w[0] + w[1] * np.sin(arg)
+    error = y - y_pred
+    current_cost = np.sum(error ** 2)
     
-    grad = np.zeros(4)
-    # 分別對 w0, w1, w2, w3 加上 eps 來計算變化率
+    gradient_of_cost = np.zeros(4)
+    
+    # 2. 對每個權重 w[k] 分別做微擾，計算斜率
     for k in range(4):
-        w_plus = w.copy()
-        w_plus[k] += eps
+        # 建立一個暫時的權重向量，將第 k 個分量 + epsilon
+        w_temp = w.copy()
+        w_temp[k] += epsilon
         
-        # 計算 J(w + eps)
-        y_p_plus = w_plus[0] + w_plus[1] * np.sin(w_plus[2] * x + w_plus[3])
-        cost_plus = np.sum((y - y_p_plus)**2)
+        # 計算新的 Cost
+        arg_temp = w_temp[2] * x + w_temp[3]
+        y_pred_temp = w_temp[0] + w_temp[1] * np.sin(arg_temp)
+        cost_temp = np.sum((y - y_pred_temp) ** 2)
         
-        # 數值梯度公式: [J(w + eps) - J(w)] / eps
-        grad[k] = (cost_plus - current_cost) / eps
+        # 數值微分公式: (f(x+h) - f(x)) / h
+        gradient_of_cost[k] = (cost_temp - current_cost) / epsilon
     
     # 更新權重
-    w = w - alpha * grad
-    
+    w = w - alpha * gradient_of_cost
 
-xt = np.linspace(xmin, xmax, 100)
+# 記錄數值法的結果曲線
 yt2 = w[0] + w[1] * np.sin(w[2] * xt + w[3])
 
-# plot x vs y; xt vs yt1; xt vs yt2 
-fig = plt.figure(dpi=288)
-plt.scatter(x, y, color='k', edgecolor='w', linewidth=0.9, s=60, zorder=3)
-plt.plot(xt, yt1, linewidth=4, c='b', zorder=0, label='Analytic method')
-plt.plot(xt, yt2, linewidth=2, c='r', zorder=0, label='Numeric method')
-plt.xlim([xmin,xmax])
-plt.ylim([ymin,ymax])
+
+# ---------------------------------------------------------
+# 繪圖比較
+# ---------------------------------------------------------
+plt.figure(figsize=(10, 6), dpi=100)
+plt.scatter(x, y, color='k', edgecolor='w', s=60, label='Data points')
+plt.plot(xt, yt1, linewidth=4, c='b', alpha=0.6, label='Analytic method')
+plt.plot(xt, yt2, linewidth=2, c='r', linestyle='--', label='Numeric method')
+
+plt.xlim([xmin, xmax])
+plt.ylim([ymin, ymax])
 plt.xlabel('$x$')
 plt.ylabel('$y$')
+plt.title('Gradient Descent: Analytic vs Numeric')
 plt.legend()
+plt.grid(True, alpha=0.3)
 plt.show()
