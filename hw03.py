@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Mon Oct 21 12:38:53 2024
-
 @author: htchen
 """
 
@@ -30,6 +29,7 @@ def mysvd(A):
     # if A is full rank, no lambda value is less than 1e-6 
     # append a small value to stop rank check
     lambdas = np.append(lambdas, 1e-12)
+    # find the cut-off point for non-zero singular values
     rank = np.argwhere(lambdas < 1e-6).min()
     lambdas, V = lambdas[0:rank], V[:, 0:rank]
     U = A @ V / np.sqrt(lambdas)
@@ -55,45 +55,45 @@ T0 = np.max(x) - np.min(x)
 f0 = 1.0 / T0
 omega0 = 2.0 * np.pi * f0
 
-# step1: generate X=[1 cos(omega0 x) cos(omega0 2x) ... cos(omega0 nx) sin(omega0 x) sin(omega0 2x) ... sin(omega0 nx)]
-# step2: SVD of X => X=USV^T
-# step3: a = U @ S^-1 @ V^T @ y
-# write your code here
-# n = 5 表示我們要取到第 5 個諧波
+# --- 這裡開始是補上的程式碼 ---
+
+# 設定要使用多少個頻率成分 (n)
+# n 越大，擬合越精確，但計算量越大。通常 n=10~20 效果就很明顯。
 n = 5
+m = len(x)
 
-# --- Step 1: 建立矩陣 X ---
-# X 的每一列代表一個樣本，每一欄代表一個基底函數
-# 欄位的順序：[1, cos(1w0x), cos(2w0x)...cos(nw0x), sin(1w0x), sin(2w0x)...sin(nw0x)]
-X = np.zeros((pts, 2 * n + 1))
+# step1: generate X=[1 cos(omega0 x) ... sin(omega0 nx)]
+# X 的大小將會是 m x (2n + 1)
+# 第一欄是常數項 (DC term)，接著是 n 個 cos 項，最後是 n 個 sin 項
+X = np.zeros((m, 2 * n + 1))
 
-X[:, 0] = 1.0  # 第一欄是常數項 a0
+X[:, 0] = 1.0  # Constant term (Bias)
 
 for k in range(1, n + 1):
-    X[:, k] = np.cos(k * omega0 * x)      # 餘弦項 a1 ~ an
-    X[:, k + n] = np.sin(k * omega0 * x)  # 正弦項 b1 ~ bn
+    # 填入 cos(k * omega0 * x)
+    X[:, k] = np.cos(k * omega0 * x)
+    # 填入 sin(k * omega0 * x)
+    # 位置在 n + k
+    X[:, n + k] = np.sin(k * omega0 * x)
 
-# --- Step 2: 對 X 進行 SVD 分解 ---
-# 這裡使用你寫好的 mysvd 函數
+# step2: SVD of X => X=USV^T
 U, Sigma, V = mysvd(X)
 
-# --- Step 3: 計算係數 a ---
-# 根據題目公式：a = V @ inv(Sigma) @ U.T @ y
-# 注意：在矩陣運算中，a = V @ Sigma^-1 @ U^T @ y
-# 因為 Sigma 是對角矩陣，Sigma^-1 就是對角線元素取倒數
-inv_Sigma = np.linalg.inv(Sigma)
-a = V @ inv_Sigma @ U.T @ y
+# step3: a = U @ S^-1 @ V^T @ y (Pseudo-inverse solution)
+# 公式推導: X a = y  =>  U Sigma V^T a = y
+# => a = V * Sigma_inv * U^T * y
+# 注意: mysvd 回傳的 Sigma 是對角矩陣，需使用 inv 求逆
+Sigma_inv = la.inv(Sigma)
+a = V @ Sigma_inv @ U.T @ y
 
+# 計算預測值 y_bar
 y_bar = X @ a
 
-plt.plot(x, y_bar, 'g-')
+# --- 結束補上的程式碼 ---
 
-plt.plot(x, y, 'b-')
-
+plt.plot(x, y_bar, 'g-', label='predicted values') 
+plt.plot(x, y, 'b-', label='true values')
 plt.xlabel('x')
-
-plt.xlabel('y')
-
+plt.ylabel('y') # 修正了原本程式碼重複的 xlabel
+plt.legend()
 plt.show()
-
-
